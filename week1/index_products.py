@@ -85,7 +85,20 @@ def get_opensearch():
     port = 9200
     auth = ('admin', 'admin')
     #### Step 2.a: Create a connection to OpenSearch
-    client = None
+
+    #### Kumar added
+    # Create the client with SSL/TLS enabled, but hostname and certificate verification disabled.
+    client = OpenSearch(
+        hosts=[{'host': host, 'port': port}],
+        http_compress=True,  # enables gzip compression for request bodies
+        http_auth=auth,
+        # client_cert = client_cert_path,
+        # client_key = client_key_path,
+        use_ssl=True,
+        verify_certs=False,
+        ssl_assert_hostname=False,
+        ssl_show_warn=False,
+    )
     return client
 
 
@@ -107,8 +120,22 @@ def index_file(file, index_name):
         if 'productId' not in doc or len(doc['productId']) == 0:
             continue
         #### Step 2.b: Create a valid OpenSearch Doc and bulk index 2000 docs at a time
-        the_doc = None
+        the_doc = doc
+        the_doc["_index"] = index_name
+        the_doc["_id"] = doc['sku'][0]
+
         docs.append(the_doc)
+        docs_indexed += 1
+
+        if (docs_indexed >= 2000):
+            bulk(client, docs)
+            docs = []
+            logger.info(f'Number of docs indexed for clusters of 2000: {docs_indexed}, for index: {index_name}.')
+
+    #### docs_indexed should have increased to the total at the end of previous loop
+    if len(docs) > 0:
+        bulk(client, docs)
+        logger.info(f'Total number of docs indexed: {docs_indexed}, for index: {index_name}.')
 
     return docs_indexed
 
